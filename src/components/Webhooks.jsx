@@ -70,13 +70,21 @@ export default function Webhooks() {
         fetchWebhooks({ scope })
     }, [scope])
 
+    const formatCallbackUrl = (url = '') => {
+        if (url.length > 75) {
+            return url.slice(0, 75) + '...'
+        }
+
+        return url
+    }
+
     const rows = webhooks.map(({ callback_url, events, created_at, state, uri }) => (
         <Table.Tr key={uri}>
             <Table.Td>{(new Date(created_at)).toLocaleDateString()}</Table.Td>
             <Table.Td>{events.map(event => {
                 return <div key={event}>{event}</div>
             })}</Table.Td>
-            <Table.Td>{callback_url}</Table.Td>
+            <Table.Td><a href={callback_url}>{formatCallbackUrl(callback_url)}</a></Table.Td>
             <Table.Td>{state}</Table.Td>
             <Table.Td>
                 <ActionIcon onClick={() => {
