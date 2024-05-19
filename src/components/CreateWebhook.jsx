@@ -129,6 +129,7 @@ export default function CreateWebhook() {
                         <Checkbox p={'xs'} value="invitee.created" label="Invitee created" />
                         <Checkbox p={'xs'} value="invitee.canceled" label="Invitee canceled" />
                         {scope !== 'group' && <Checkbox p={'xs'} value="invitee_no_show.created" label="No show created" />}
+                        {scope !== 'group' && <Checkbox p={'xs'} value="invitee_no_show.deleted" label="No show deleted" />}
                         {scope === 'organization' && <Checkbox p={'xs'} value="routing_form_submission.created" label="Routing form submission created" />}
                     </Checkbox.Group>
 
