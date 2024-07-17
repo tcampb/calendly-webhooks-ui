@@ -67,7 +67,7 @@ class CalendlyApi {
             `sort=created_at:desc`,
             scope === 'user' ? `user=${this.user}` : '',
             pageToken ? `page_token=${pageToken}` : '',
-            group ? `group=${group}` : ""
+            scope === 'group' && group ? `group=${group}` : ""
         ].join('&')
 
 
