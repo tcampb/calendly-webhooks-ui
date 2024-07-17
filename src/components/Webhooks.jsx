@@ -20,11 +20,13 @@ export default function Webhooks() {
     const [selectedWebhook, setSelectedWebhook] = useState(null)
     const [isDeleting, setIsDeleting] = useState(false)
     const [error, setError] = useState(null)
+    const [groups, setGroups] = useState([])
+    const [group, setGroup] = useState(null)
 
-    const fetchWebhooks = async ({ scope, pageToken }) => {
+    const fetchWebhooks = async ({ scope, pageToken, group }) => {
         setLoading(true)
         const api = new CalendlyApi();
-        const [success, data] = await api.getWebhooks({ scope, pageToken })
+        const [success, data] = await api.getWebhooks({ scope, pageToken, group })
 
         if (success) {
             setWebhooks(data.collection)
@@ -35,31 +37,48 @@ export default function Webhooks() {
         setLoading(false)
     }
 
+    const fetchGroups = async () => {
+        setLoading(true);
+        const api = new CalendlyApi();
+        const [success, data] = await api.getGroups();
+    
+        if (success && data.collection.length) {
+          const groupData = data.collection.map(({ name: label, uri: value }) => ({
+            label,
+            value,
+          }));
+          setGroups(groupData);
+    
+          if (groupData.length) setGroup(groupData[0].value);
+        }
+    
+        setLoading(false);
+    };
+
     const onDelete = async () => {
         setIsDeleting(true)
         const api = new CalendlyApi();
         const [success, error] = await api.deleteWebhook(selectedWebhook)
-        const isEmptyPage = webhooks.length === 1
-
-        setIsDeleting(false)
 
         if (success) {
-            setWebhooks(webhooks.filter(({ uri }) => uri !== selectedWebhook))
-
+            // delay to prevent race condition
+            await new Promise((resolve) => {
+                setTimeout(resolve, 500)
+            })
             close()
 
-            if (isEmptyPage) {
-                fetchWebhooks({ scope })
-            }
+            fetchWebhooks({ scope, group })
         } else {
             setError(JSON.stringify(error))
         }
+
+        setIsDeleting(false)
     }
 
     const onPagination = (action) => {
         const pageToken = action === 'next' ? nextPage : prevPage
 
-        fetchWebhooks({ scope, pageToken })
+        fetchWebhooks({ scope, pageToken, group })
     }
 
     useEffect(() => {
@@ -67,8 +86,16 @@ export default function Webhooks() {
         setNextPage(null)
         setPrevPage(null)
 
-        fetchWebhooks({ scope })
-    }, [scope])
+        fetchWebhooks({ scope, group })
+    }, [scope, group])
+
+    const formatCallbackUrl = (url = '') => {
+        if (url.length > 75) {
+            return url.slice(0, 75) + '...'
+        }
+
+        return url
+    }
 
     const formatCallbackUrl = (url = '') => {
         if (url.length > 75) {
@@ -103,20 +130,46 @@ export default function Webhooks() {
         <Flex justify={'center'}>
             <Flex direction={'column'} justify={'space-between'}>
                 <Flex mb={'md'} justify={'space-between'}>
-                    <NativeSelect label="Scope" data={[{
-                        value: 'user',
-                        label: 'My Account'
-                    }, {
-                        value: 'organization',
-                        label: 'Organization'
-                    }]}
-                        onChange={(e) => {
-                            setScope(e.target.value)
-                            setSearchParams({ scope: e.target.value })
-                        }}
-                        value={scope}
+                    <div>
+                        <NativeSelect label="Scope" data={
+                            [
+                                {
+                                    value: 'user',
+                                    label: 'My Account'
+                                }, 
+                                {
+                                    value: 'organization',
+                                    label: 'Organization'
+                                },
+                                {
+                                    value: "group",
+                                    label: "Group"
+                                }
+                            ]
+                        }
+                            onChange={(e) => {
+                                if (e.target.value === "group") {
+                                    fetchGroups();
+                                } else {
+                                    setSearchParams({ scope: e.target.value });
+                                }
+                                setScope(e.target.value)
+                            }}
+                            value={scope}
 
-                    />
+                        />
+                        {
+                            scope === 'group' && (
+                            <NativeSelect
+                                label="Group"
+                                data={groups}
+                                onChange={(e) => {
+                                    setGroup(e.target.value);
+                                }}
+                                value={group}
+                            />
+                        )}
+                    </div>
                     <Button
                         size="sm"
                         component={Link}

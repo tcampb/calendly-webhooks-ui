@@ -60,13 +60,18 @@ class CalendlyApi {
         return this.request.get(`/groups?organization=${this.organization}&count=100`, this.requestConfiguration());
     };
 
-    getWebhooks = async ({ scope, pageToken } = { scope: 'user' }) => {
+    getWebhooks = async ({ scope, pageToken, group } = { scope: 'user' }) => {
+        if (scope === 'group' && !group) {
+            return [true, { collection: [], pagination: {} }]
+        }
+
         const query = [
             `scope=${scope}`,
             `organization=${this.organization}`,
             `sort=created_at:desc`,
             scope === 'user' ? `user=${this.user}` : '',
             pageToken ? `page_token=${pageToken}` : '',
+            scope === 'group' && group ? `group=${group}` : ""
         ].join('&')
 
 
