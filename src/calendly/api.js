@@ -61,6 +61,10 @@ class CalendlyApi {
     };
 
     getWebhooks = async ({ scope, pageToken, group } = { scope: 'user' }) => {
+        if (scope === 'group' && !group) {
+            return [true, { collection: [], pagination: {} }]
+        }
+
         const query = [
             `scope=${scope}`,
             `organization=${this.organization}`,
