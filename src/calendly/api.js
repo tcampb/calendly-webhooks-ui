@@ -3,168 +3,159 @@ import { CLIENT_ID } from "./config";
 import { loadAuthContext, saveAuthContext } from "../storage";
 
 class CalendlyApi {
-  constructor() {
-    const context = loadAuthContext();
+    constructor() {
+        const context = loadAuthContext();
 
-    if (!context) {
-      window.location.href = "/";
+        if (!context) {
+            window.location.href = "/";
+        }
+
+        const { access_token, refresh_token, owner, organization } = context;
+        this.user = owner;
+        this.accessToken = access_token;
+        this.refreshToken = refresh_token;
+        this.organization = organization;
+        this.request = axios.create({
+            baseURL: "https://api.calendly.com",
+        });
+
+        this.requestInterceptor = this.request.interceptors.response.use(
+            (res) => [true, res.data],
+            this._onCalendlyError,
+        );
     }
 
-    const { access_token, refresh_token, owner, organization } = context;
-    this.user = owner;
-    this.accessToken = access_token;
-    this.refreshToken = refresh_token;
-    this.organization = organization;
-    this.request = axios.create({
-      baseURL: "https://api.calendly.com",
-    });
-
-    this.requestInterceptor = this.request.interceptors.response.use(
-      (res) => [true, res.data],
-      this._onCalendlyError
-    );
-  }
-
-  requestConfiguration() {
-    return {
-      headers: {
-        Authorization: `Bearer ${this.accessToken}`,
-      },
-    };
-  }
-
-  getUserInfo = async () => {
-    return this.request.get("/users/me", this.requestConfiguration());
-  };
-
-  getUserMembership = async () => {
-    const [success, data] = await this.request.get(
-      `/organization_memberships?user=${this.user}&organization=${this.organization}`,
-      this.requestConfiguration()
-    );
-
-    if (!success) {
-      return [false, data];
+    requestConfiguration() {
+        return {
+            headers: {
+                Authorization: `Bearer ${this.accessToken}`,
+            },
+        };
     }
 
-    const { role, organization, user } = data.collection[0];
-
-    return [true, { role, organization, user: user.uri }];
-  };
-
-  getGroups = async () => {
-    return this.request.get(
-      `/groups?organization=${this.organization}&count=100`,
-      this.requestConfiguration()
-    );
-  };
-
-  getWebhooks = async ({ scope, pageToken, group } = { scope: "user" }) => {
-    const query = [
-      `scope=${scope}`,
-      `organization=${this.organization}`,
-      `sort=created_at:desc`,
-      scope === "user" ? `user=${this.user}` : "",
-      pageToken ? `page_token=${pageToken}` : "",
-      group ? `group=${group}` : "",
-    ].join("&");
-
-    return this.request.get(
-      `/webhook_subscriptions?${query}`,
-      this.requestConfiguration()
-    );
-  };
-
-  createWebhook = async ({
-    events,
-    organization,
-    user,
-    url,
-    scope,
-    group,
-    signing_key,
-  }) => {
-    const data = {
-      events,
-      organization,
-      url,
-      scope,
+    getUserInfo = async () => {
+        return this.request.get("/users/me", this.requestConfiguration());
     };
 
-    if (signing_key) {
-      data.signing_key = signing_key;
+    getUserMembership = async () => {
+        const [success, data] = await this.request.get(
+            `/organization_memberships?user=${this.user}&organization=${this.organization}`,
+            this.requestConfiguration(),
+        );
+
+        if (!success) {
+            return [false, data];
+        }
+
+        const {
+            role,
+            organization,
+            user
+        } = data.collection[0];
+
+        return [true, { role, organization, user: user.uri }];
     }
 
-    if (scope === "user") {
-      data.user = user;
-    } else if (scope === "group") {
-      data.group = group;
+    getGroups = async () => {
+        return this.request.get(`/groups?organization=${this.organization}&count=100`, this.requestConfiguration());
+    };
+
+    getWebhooks = async ({ scope, pageToken, group } = { scope: 'user' }) => {
+        const query = [
+            `scope=${scope}`,
+            `organization=${this.organization}`,
+            `sort=created_at:desc`,
+            scope === 'user' ? `user=${this.user}` : '',
+            pageToken ? `page_token=${pageToken}` : '',
+            group ? `group=${group}` : ""
+        ].join('&')
+
+
+        return this.request.get(`/webhook_subscriptions?${query}`, this.requestConfiguration());
     }
 
-    return this.request.post(
-      "/webhook_subscriptions",
-      data,
-      this.requestConfiguration()
-    );
-  };
+    createWebhook = async ({ events, organization, user, url, scope, group, signing_key }) => {
+        const data = {
+            events,
+            organization,
+            url,
+            scope
+        };
 
-  deleteWebhook = async (uri) => {
-    const path = uri.replace("https://api.calendly.com", "");
-    return this.request.delete(path, this.requestConfiguration());
-  };
+        if (signing_key) {
+            data.signing_key = signing_key;
+        }
 
-  requestNewAccessToken = () => {
-    return axios.post(`https://auth.calendly.com/oauth/token`, {
-      client_id: CLIENT_ID,
-      grant_type: "refresh_token",
-      refresh_token: this.refreshToken,
-    });
-  };
+        if (scope === 'user') {
+            data.user = user;
+        } else if (scope === 'group') {
+            data.group = group;
+        }
 
-  _onCalendlyError = async (error) => {
-    if (error.response.status === 500) {
-      console.error(error.response.data);
-      return Promise.resolve([false, "Internal server error"]);
+        return this.request.post(
+            "/webhook_subscriptions",
+            data,
+            this.requestConfiguration(),
+        );
     }
 
-    if (error.response.status !== 401) {
-      return Promise.resolve([false, error.response.data]);
+    deleteWebhook = async (uri) => {
+        const path = uri.replace("https://api.calendly.com", "");
+        return this.request.delete(path, this.requestConfiguration());
     }
 
-    this.request.interceptors.response.eject(this.requestInterceptor);
+    requestNewAccessToken = () => {
+        return axios.post(`https://auth.calendly.com/oauth/token`, {
+            client_id: CLIENT_ID,
+            grant_type: "refresh_token",
+            refresh_token: this.refreshToken,
+        });
+    };
 
-    try {
-      const response = await this.requestNewAccessToken();
-      const { access_token, refresh_token } = response.data;
+    _onCalendlyError = async (error) => {
+        if (error.response.status === 500) {
+            console.error(error.response.data);
+            return Promise.resolve([false, "Internal server error"]);
+        }
 
-      const context = loadAuthContext();
+        if (error.response.status !== 401) {
+            return Promise.resolve([false, error.response.data]);
+        }
 
-      context.access_token = access_token;
-      context.refresh_token = refresh_token;
+        this.request.interceptors.response.eject(this.requestInterceptor);
 
-      saveAuthContext(context);
+        try {
+            const response = await this.requestNewAccessToken();
+            const { access_token, refresh_token } = response.data;
 
-      this.accessToken = access_token;
-      this.refreshToken = refresh_token;
+            const context = loadAuthContext();
 
-      error.response.config.headers.Authorization = `Bearer ${access_token}`;
+            context.access_token = access_token;
+            context.refresh_token = refresh_token;
 
-      // retry original request with new access token
-      return this.request(error.response.config)
-        .then((res) => {
-          return [true, res.data];
-        })
-        .catch((err) => [false, err.response.data]);
-    } catch (e) {
-      return [false, e.response.data];
-    } finally {
-      // we need to re-add the interceptor to ensure we can refresh the token again for future requests
-      this.requestInterceptor = this.request.interceptors.response.use(
-        (res) => [true, res.data],
-        this._onCalendlyError
-      );
-    }
-  };
+            saveAuthContext(context);
+
+            this.accessToken = access_token;
+            this.refreshToken = refresh_token;
+
+            error.response.config.headers.Authorization = `Bearer ${access_token}`;
+
+            // retry original request with new access token
+            return this.request(error.response.config)
+                .then((res) => {
+                    return [true, res.data];
+                })
+                .catch((err) => [false, err.response.data]);
+        } catch (e) {
+            return [false, e.response.data];
+        } finally {
+            // we need to re-add the interceptor to ensure we can refresh the token again for future requests
+            this.requestInterceptor = this.request.interceptors.response.use(
+                (res) => [true, res.data],
+                this._onCalendlyError,
+            );
+        }
+    };
 }
 
 export default CalendlyApi;
